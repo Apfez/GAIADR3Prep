@@ -26,3 +26,5 @@ print("psi = %1.1f deg"%np.mean(psi*180/np.pi))
 plt.show()
 
 print('am I on git?')
+
+print('yo this is from the laptop')
