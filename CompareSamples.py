@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import GAIAFunctions as gf
+import GAIAfunctions as gf
 
 # Get all stars from csv for use as control sample
 control_stars_unfiltered = pd.read_csv("all_gaia_stars-result.csv")
@@ -23,7 +23,7 @@ feh_min = -0.5
 feh_max = 1
 
 # science_sample = gf.get_confirmed_planet_hosts(T_eff_min, T_eff_max, logg_min, logg_max, feh_min, feh_max)
-science_sample = gf.get_binaries()
+science_sample = gf.get_binaries(1000)
 
 control_sample = gf.make_control_sample(control_stars_unfiltered, science_sample)  # Takes a long time to run, so I make a new cell
 
