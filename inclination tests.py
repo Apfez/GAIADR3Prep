@@ -25,6 +25,43 @@ print("psi = %1.1f deg"%np.mean(psi*180/np.pi))
 
 plt.show()
 
-print('am I on git?')
+###############################################################################
+#%%
+# 3D scatter plot
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+fig.set_size_inches(15, 15)
 
-print('yo this is from the laptop')
+
+i_o_err = 0.001*np.pi/180
+psi_err = 5*np.pi/180
+
+
+incs = []
+for n in range(100):
+
+    i_s = np.arccos(np.random.uniform(0, 1))
+    lmbda = np.random.uniform(-np.pi, np.pi)
+
+    n_s = [np.sin(i_s * np.pi / 180) * np.sin(lmbda * np.pi / 180),
+           np.sin(i_s * np.pi / 180) * np.cos(lmbda * np.pi / 180),
+           np.cos(i_s * np.pi / 180)]
+
+    ax.scatter(n_s[0], n_s[1], n_s[2])
+
+    i_o = 10000
+    while i_o > 20 * np.pi / 180:
+        i_o = np.random.rayleigh(i_o_err)
+
+    psi = np.random.rayleigh(psi_err)
+    Omega = np.random.uniform(-np.pi * 2, np.pi * 2)
+
+    lmbda = np.arctan(
+        np.sin(psi) * np.sin(Omega) / (np.cos(psi) * np.sin(i_o) + np.sin(psi) * np.cos(Omega) * np.cos(i_o)))
+
+    i_s = np.abs(np.arcsin(np.sin(psi) * np.sin(Omega) / np.sin(lmbda)))
+
+
+
+
+plt.show()

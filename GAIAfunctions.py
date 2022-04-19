@@ -3,6 +3,14 @@ import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 
 
+def v_rotation(T, c0, c1, c2):
+    tau = (T - 5800) / 1000
+
+    v = c0 + c1 * tau + c2 * tau ** 2
+
+    return v
+
+
 def get_confirmed_planet_hosts(T_min, T_max, l_min, l_max, f_min, f_max):
     df = pd.read_csv('All_confirmed_planets.csv')
     df.drop_duplicates(subset="hostname", keep="first", inplace=True)
@@ -26,7 +34,7 @@ def get_confirmed_planet_hosts(T_min, T_max, l_min, l_max, f_min, f_max):
     return df[mask]
 
 
-def get_binaries(N):
+def get_binaries(N, psi_err, i_o_err):
     df = pd.read_csv('fake_binaries.csv')
 
     if N >= len(df):
@@ -34,18 +42,26 @@ def get_binaries(N):
 
     df = df[:N]
 
-    incs = []
+    i_os = []
+    i_ss = []
+    for n in range(N):
 
-    for i in range(N):
+        i_o = 10000
+        while i_o > 30 * np.pi / 180:  # cut-off in inclination corresponding to a potential choice we want to make to avoid degeneracy in psi
+            i_o = np.random.rayleigh(i_o_err)
+        i_os.append(i_o)
 
-        i = 10000
+        psi = np.random.rayleigh(psi_err)
+        Omega = np.random.uniform(-np.pi * 2, np.pi * 2)
 
-        while i > 20 * np.pi/180:
-            i = np.random.rayleigh(15*np.pi/180)
+        lmbda = np.arctan(
+            np.sin(psi) * np.sin(Omega) / (np.cos(psi) * np.sin(i_o) + np.sin(psi) * np.cos(Omega) * np.cos(i_o)))
 
-        incs.append(i)
+        i_s = np.abs(np.arcsin(np.sin(psi) * np.sin(Omega) / np.sin(lmbda)))
+        i_ss.append(i_s)
 
-    df['inclination_o'] = incs
+    df['i_o'] = i_os
+    df['vbroad'] = v_rotation(df['teff'], 5.5, 3.5, 2.4) * np.sin(np.array(i_ss))
 
     return df
 
@@ -98,6 +114,8 @@ def make_control_sample(cs_unfiltered, science_sample):
 
     # remove duplicate stars from the control sample
     cs.drop_duplicates(subset="source_id", keep="first", inplace=True)
+
+    cs['vbroad'] = v_rotation(cs['teff'], 5.5, 3.5, 2.4) * np.sin(np.arccos(np.random.uniform(0, 1, len(cs))))
 
     return cs
 
