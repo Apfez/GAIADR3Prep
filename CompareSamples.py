@@ -22,12 +22,15 @@ logg_max = 4.8
 feh_min = -0.5
 feh_max = 1
 
+psi_kappa = 5
+i_o_kappa = 15
+
 # science_sample = gf.get_confirmed_planet_hosts(T_eff_min, T_eff_max, logg_min, logg_max, feh_min, feh_max)
-science_sample = gf.get_binaries(1000)
+science_sample = gf.get_binaries(1000, psi_kappa, i_o_kappa)
 
 control_sample = gf.make_control_sample(control_stars_unfiltered, science_sample)  # Takes a long time to run, so I make a new cell
 
-#%%
+
 ################################## plot the data #############################################
 
 fig, axs = plt.subplots(4)

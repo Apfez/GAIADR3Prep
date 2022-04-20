@@ -34,7 +34,7 @@ def get_confirmed_planet_hosts(T_min, T_max, l_min, l_max, f_min, f_max):
     return df[mask]
 
 
-def get_binaries(N, psi_err, i_o_err):
+def get_binaries(N, psi_kappa, i_o_kappa, psi_mu=0, i_o_mu=0):
     df = pd.read_csv('fake_binaries.csv')
 
     if N >= len(df):
@@ -43,24 +43,26 @@ def get_binaries(N, psi_err, i_o_err):
     df = df[:N]
 
     i_os = []
-    i_ss = []
     for n in range(N):
 
         i_o = 10000
         while i_o > 30 * np.pi / 180:  # cut-off in inclination corresponding to a potential choice we want to make to avoid degeneracy in psi
-            i_o = np.random.rayleigh(i_o_err)
+            i_o = vMF_sampler(i_o_kappa, i_o_mu)
         i_os.append(i_o)
+    i_os = np.array(i_os)
 
-        psi = np.random.rayleigh(psi_err)
-        Omega = np.random.uniform(-np.pi * 2, np.pi * 2)
+    psis = vMF_sampler(psi_kappa, psi_mu, N)
 
-        lmbda = np.arctan(
-            np.sin(psi) * np.sin(Omega) / (np.cos(psi) * np.sin(i_o) + np.sin(psi) * np.cos(Omega) * np.cos(i_o)))
+    Omegas = np.random.uniform(-np.pi * 2, np.pi * 2, N)
+    lmbdas = np.arctan(
+        np.sin(psis) * np.sin(Omegas) / (np.cos(psis) * np.sin(i_os) + np.sin(psis) * np.cos(Omegas) * np.cos(i_os)))
 
-        i_s = np.abs(np.arcsin(np.sin(psi) * np.sin(Omega) / np.sin(lmbda)))
-        i_ss.append(i_s)
+    i_ss = np.arcsin(np.abs(np.sin(psis) * np.sin(Omegas) / np.sin(lmbdas)))
 
+    df['psi'] = psis
+    df['i_s'] = i_ss
     df['i_o'] = i_os
+    df['i_o_err'] = np.random.uniform(2, 10, N)*np.pi/180
     df['vbroad'] = v_rotation(df['teff'], 5.5, 3.5, 2.4) * np.sin(np.array(i_ss))
 
     return df
@@ -120,3 +122,35 @@ def make_control_sample(cs_unfiltered, science_sample):
     return cs
 
 
+def p_fisher(psi, mu, kappa):
+
+    if kappa == 0:  # as to not divide by zero
+        return np.sin(psi)
+    elif kappa < 100:
+        return kappa / (np.exp(kappa) - np.exp(-kappa)) * np.exp(kappa * np.cos(psi - mu)) * np.sin(psi)
+    else:  # to avoid overflow
+        sigma = kappa ** (-0.5)
+        return psi / (sigma ** 2) * np.exp(-psi ** 2 / (2 * sigma ** 2))
+
+
+def vMF_sampler(kappa, mu, size=1):
+
+    if kappa >= 100:
+        sigma = kappa ** (-0.5)
+        samples = np.random.rayleigh(sigma, size)
+    else:
+        samples = []
+        scaling = np.max(p_fisher(np.linspace(0, np.pi, 10000), mu, kappa))
+
+        while len(samples) < size:  # uses a kind of accept-reject method to sample from a von Mises-Fisher distribution
+
+            psi_rand = np.random.uniform(0, np.pi)
+            height = np.random.uniform(0, 1)
+
+            if height < p_fisher(psi_rand, mu, kappa) / scaling:
+                samples.append(psi_rand)
+
+    if size == 1:
+        return samples[0]
+
+    return np.array(samples)
