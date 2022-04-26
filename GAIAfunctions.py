@@ -1,3 +1,4 @@
+from scipy import optimize
 import numpy as np
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -34,7 +35,7 @@ def get_confirmed_planet_hosts(T_min, T_max, l_min, l_max, f_min, f_max):
     return df[mask]
 
 
-def get_binaries(N, psi_kappa, i_o_kappa, psi_mu=0, i_o_mu=0):
+def get_binaries(N, psi_kappa, i_o_kappa, psi_mu=0, i_o_mu=0, dependencies=False):
     df = pd.read_csv('fake_binaries.csv')
 
     if N >= len(df):
@@ -51,7 +52,28 @@ def get_binaries(N, psi_kappa, i_o_kappa, psi_mu=0, i_o_mu=0):
         i_os.append(i_o)
     i_os = np.array(i_os)
 
-    psis = vMF_sampler(psi_kappa, psi_mu, N)
+    if dependencies:
+        aor_max = 500
+        aor_min = 1
+        df['a_over_R'] = np.random.uniform(aor_min, aor_max, N)
+
+        kappa_max = psi_kappa*4
+        kappa_min = psi_kappa/4
+        psis = []
+
+        for n in range(N):
+            # a = (kappa_max - kappa_min)/(aor_max - aor_min)
+            # psi_kappa = a*df['a_over_R'][n] + kappa_min - a*aor_min
+            # psis.append(vMF_sampler(psi_kappa, psi_mu))
+
+            if df['a_over_R'][n] > 200:
+                psis.append(vMF_sampler(psi_kappa*4, psi_mu))
+            else:
+                psis.append(vMF_sampler(psi_kappa/2, psi_mu))
+
+        psis = np.array(psis)
+    else:
+        psis = vMF_sampler(psi_kappa, psi_mu, N)
 
     Omegas = np.random.uniform(-np.pi * 2, np.pi * 2, N)
     lmbdas = np.arctan(
@@ -68,7 +90,14 @@ def get_binaries(N, psi_kappa, i_o_kappa, psi_mu=0, i_o_mu=0):
     return df
 
 
-def make_control_sample(cs_unfiltered, science_sample):
+def make_control_sample(science_sample):
+    # Get all stars from csv for use as control sample
+    cs_unfiltered = pd.read_csv("all_gaia_stars-result.csv")
+
+    # Add some noise to the data. This is only necessary when using simulated gaia results
+    cs_unfiltered['teff'] = cs_unfiltered['teff'] + np.random.uniform(-100, 100, len(cs_unfiltered))
+    cs_unfiltered['logg'] = cs_unfiltered['logg'] + np.random.uniform(-0.1, 0.1, len(cs_unfiltered))
+    cs_unfiltered['feh'] = cs_unfiltered['feh'] + np.random.uniform(-0.1, 0.1, len(cs_unfiltered))
 
     # construct a control sample by selecting stars from the science sample with similar T_eff,logg,feh and perhaps magnitude.
     control_sample_ids = []
@@ -154,3 +183,36 @@ def vMF_sampler(kappa, mu, size=1):
         return samples[0]
 
     return np.array(samples)
+
+
+def bootstrap_data(runs, cs, ss):
+
+    ms = []
+    for ru in range(runs):
+        # randomly redrawing from the same distribution ala louden
+        randints_control = np.random.randint(0, len(cs), len(cs))
+
+        vsinis_control_new = np.array(cs['vbroad'])[randints_control]  # redrawing all control stars with repetitions allowed
+        Ts_control_new = np.array(cs['teff'])[randints_control]
+
+        def bootstrap_mean_is():
+            randints_science = np.random.randint(0, len(ss), len(ss))
+
+            vsinis_science_new = np.array(ss['vbroad'])[randints_science]  # redrawing all science stars with repetitions allowed
+            Ts_science_new = np.array(ss['teff'])[randints_science]
+
+            def f(x):  # eq 7 from louden
+                mean, a, b, c = x
+
+                hosts = np.sum((vsinis_science_new - mean * v_rotation(Ts_science_new, a, b, c)) ** 2)
+                controls = np.sum((vsinis_control_new - np.pi / 4 * v_rotation(Ts_control_new, a, b, c)) ** 2)
+
+                return controls + hosts
+
+            result = optimize.minimize(f, (1, 5.5, 3.5, 1.8))  # find best order 2 polynomial fit to ALL stars, and best fitting meansini for science stars
+
+            return result.x[0]
+
+        ms.append(bootstrap_mean_is())
+
+    return ms
